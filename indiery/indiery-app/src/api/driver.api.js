@@ -34,9 +34,9 @@ export const driverApi = {
   },
 
   // Get driver's orders
-  getOrders: async (status) => {
+  getOrders: async (params = {}) => {
     const response = await client.get('/drivers/orders', {
-      params: { status },
+      params,
     });
     return response.data;
   },

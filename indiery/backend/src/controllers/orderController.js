@@ -341,3 +341,55 @@ export const rateOrder = async (req, res, next) => {
     next(err);
   }
 };
+
+/**
+ * GET /orders/available (driver) - get pending orders in their area
+ */
+export const getAvailableOrders = async (req, res, next) => {
+  try {
+    const driver = await Driver.findOne({ user: req.user._id });
+    if (!driver) {
+      return res.status(404).json({ success: false, message: 'Driver not found' });
+    }
+
+    // Get pending orders within 10km of driver's current location
+    const orders = await Order.find({
+      status: ORDER_STATUS.PENDING,
+      vehicleType: driver.vehicleType,
+    }).populate('customer', 'name phone profileImage').limit(50);
+
+    res.json({ success: true, orders });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /orders/my-orders (customer) - get current user's orders
+ */
+export const getMyOrders = async (req, res, next) => {
+  try {
+    const { status, limit = 20, skip = 0 } = req.query;
+    
+    const query = { customer: req.user._id };
+    if (status) {
+      query.status = status;
+    }
+
+    const orders = await Order.find(query)
+      .populate('driver', 'vehicleType rating')
+      .populate({ 
+        path: 'driver', 
+        populate: { path: 'user', select: 'name phone profileImage' } 
+      })
+      .sort({ createdAt: -1 })
+      .skip(parseInt(skip))
+      .limit(parseInt(limit));
+
+    const total = await Order.countDocuments(query);
+
+    res.json({ success: true, orders, total });
+  } catch (err) {
+    next(err);
+  }
+};

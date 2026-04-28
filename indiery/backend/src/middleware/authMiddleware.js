@@ -14,7 +14,22 @@ export const verifyFirebaseToken = async (req, res, next) => {
 
     const token = authHeader.split(' ')[1];
     const decoded = await admin.auth().verifyIdToken(token);
-    req.firebaseUser = decoded;
+    
+    // Fetch full user profile from Firebase to get email, phone, name, picture
+    const firebaseUser = await admin.auth().getUser(decoded.uid);
+    
+    // Combine token claims with full user profile data
+    req.firebaseUser = {
+      uid: decoded.uid,
+      email: firebaseUser.email || null,
+      emailVerified: firebaseUser.emailVerified,
+      phone_number: firebaseUser.phoneNumber || null,
+      name: firebaseUser.displayName || null,
+      picture: firebaseUser.photoURL || null,
+      providerData: firebaseUser.providerData,
+      // Include any custom claims from token
+      ...decoded,
+    };
 
     const user = await User.findOne({ firebaseUid: decoded.uid });
     if (user) req.user = user;

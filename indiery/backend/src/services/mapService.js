@@ -1,5 +1,5 @@
 import axios from 'axios';
-import env from '../config/env.js';
+import { MAPPLS_CLIENT_ID, MAPPLS_CLIENT_SECRET, MAPPLS_REST_KEY } from '../config/env.js';
 import logger from '../utils/logger.js';
 import { haversineKm, round2 } from '../utils/helpers.js';
 
@@ -13,8 +13,8 @@ const getMapplsToken = async () => {
       'https://outpost.mappls.com/api/security/oauth/token',
       new URLSearchParams({
         grant_type: 'client_credentials',
-        client_id: env.MAPPLS.CLIENT_ID,
-        client_secret: env.MAPPLS.CLIENT_SECRET,
+        client_id: MAPPLS_CLIENT_ID,
+        client_secret: MAPPLS_CLIENT_SECRET,
       }),
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
@@ -31,15 +31,19 @@ const getMapplsToken = async () => {
  * Distance + duration. Falls back to haversine if Mappls fails.
  */
 export const getDistanceMatrix = async (origin, destination) => {
+  logger.info(`getDistanceMatrix called with origin=${JSON.stringify(origin)}, destination=${JSON.stringify(destination)}`);
+  
   try {
     const token = await getMapplsToken();
-    const url = `https://apis.mappls.com/advancedmaps/v1/${env.MAPPLS.REST_KEY}/distance_matrix/driving/${origin[0]},${origin[1]};${destination[0]},${destination[1]}`;
+    const url = `https://apis.mappls.com/advancedmaps/v1/${MAPPLS_REST_KEY}/distance_matrix/driving/${origin[0]},${origin[1]};${destination[0]},${destination[1]}`;
 
     const res = await axios.get(url, {
       headers: { Authorization: `Bearer ${token}` },
       timeout: 8000,
     });
 
+    logger.info(`Mappls response: ${JSON.stringify(res.data)}`);
+    
     const result = res.data?.results;
     if (result?.distances && result?.durations) {
       return {
@@ -52,6 +56,7 @@ export const getDistanceMatrix = async (origin, destination) => {
   } catch (err) {
     logger.warn(`Mappls failed, falling back to haversine: ${err.message}`);
     const distanceKm = round2(haversineKm(origin, destination));
+    logger.info(`Haversine fallback distance: ${distanceKm} km`);
     return {
       distanceKm,
       durationMin: Math.ceil((distanceKm / 25) * 60),
@@ -72,8 +77,22 @@ export const geocodeAddress = async (address) => {
     if (r?.latitude && r?.longitude) return [r.longitude, r.latitude];
     throw new Error('No results found');
   } catch (err) {
-    logger.error(`Geocode error: ${err.message}`);
-    throw new Error('Address geocoding failed');
+    logger.warn(`Mappls geocode failed, falling back to Nominatim: ${err.message}`);
+    // Fallback to Nominatim (OpenStreetMap) - free geocoding
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`;
+      const res = await axios.get(url, {
+        headers: { 'User-Agent': 'IndieryApp/1.0' },
+        timeout: 10000,
+      });
+      if (res.data && res.data.length > 0) {
+        return [parseFloat(res.data[0].lon), parseFloat(res.data[0].lat)];
+      }
+      throw new Error('No results found');
+    } catch (fallbackErr) {
+      logger.error(`Nominatim fallback also failed: ${fallbackErr.message}`);
+      throw new Error('Address geocoding failed');
+    }
   }
 };
 

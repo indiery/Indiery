@@ -1,17 +1,38 @@
 import React, { useEffect, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { getEarnings } from '../../api/driver.api';
+import colors from '../../theme/colors';
+import Pill from '../../components/common/Pill';
 
 const EarningsScreen = ({ navigation }) => {
   const [earnings, setEarnings] = useState({
-    today: 0,
-    week: 0,
-    month: 0,
+    today: 842,
+    week: 4820,
+    month: 18560,
     total: 0
   });
-  const [transactions, setTransactions] = useState([]);
+  const [transactions, setTransactions] = useState([
+    { _id: '1', orderId: 'IND-1042', amount: '156', status: 'Completed', createdAt: new Date() },
+    { _id: '2', orderId: 'IND-1041', amount: '89', status: 'Completed', createdAt: new Date(Date.now() - 86400000) },
+    { _id: '3', orderId: 'IND-1040', amount: '234', status: 'Completed', createdAt: new Date(Date.now() - 172800000) },
+    { _id: '4', orderId: 'IND-1039', amount: '112', status: 'Completed', createdAt: new Date(Date.now() - 259200000) },
+    { _id: '5', orderId: 'IND-1038', amount: '78', status: 'Completed', createdAt: new Date(Date.now() - 345600000) },
+  ]);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState('today');
+  const [selectedPeriod, setSelectedPeriod] = useState('week');
+
+  const driverColor = colors.role.driver.primary;
+
+  // Weekly bar chart data
+  const weeklyData = [
+    { day: 'Mon', amount: 720 },
+    { day: 'Tue', amount: 540 },
+    { day: 'Wed', amount: 890 },
+    { day: 'Thu', amount: 680 },
+    { day: 'Fri', amount: 1020 },
+    { day: 'Sat', amount: 580 },
+    { day: 'Sun', amount: 390 },
+  ];
 
   const fetchEarnings = async () => {
     try {
@@ -38,268 +59,126 @@ const EarningsScreen = ({ navigation }) => {
       case 'today': return earnings.today;
       case 'week': return earnings.week;
       case 'month': return earnings.month;
-      default: return earnings.today;
+      default: return earnings.week;
     }
   };
 
-  const renderPeriodButton = (period, label) => (
-    <TouchableOpacity
-      style={[styles.periodButton, selectedPeriod === period && styles.periodButtonActive]}
-      onPress={() => setSelectedPeriod(period)}
-    >
-      <Text style={[styles.periodButtonText, selectedPeriod === period && styles.periodButtonTextActive]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-
-  const renderTransaction = ({ item }) => (
-    <View style={styles.transactionItem}>
-      <View style={styles.transactionInfo}>
-        <Text style={styles.transactionId}>#{item.orderId}</Text>
-        <Text style={styles.transactionDate}>
-          {new Date(item.createdAt).toLocaleDateString()}
-        </Text>
-      </View>
-      <View style={styles.transactionRight}>
-        <Text style={styles.transactionAmount}>+₹{item.amount}</Text>
-        <Text style={styles.transactionStatus}>{item.status}</Text>
-      </View>
-    </View>
-  );
+  const maxAmount = Math.max(...weeklyData.map(d => d.amount));
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Your Earnings</Text>
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: driverColor }]}>
+        <Text style={styles.headerTitle}>Earnings</Text>
+        <Text style={styles.headerSub}>Track your income</Text>
       </View>
 
-      <View style={styles.earningsCard}>
-        <Text style={styles.earningsLabel}>
-          {selectedPeriod === 'today' ? "Today's Earnings" : 
-           selectedPeriod === 'week' ? "This Week" : "This Month"}
-        </Text>
-        <Text style={styles.earningsAmount}>₹{getPeriodEarnings().toFixed(2)}</Text>
-        
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Today</Text>
-            <Text style={styles.statValue}>₹{earnings.today}</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Week</Text>
-            <Text style={styles.statValue}>₹{earnings.week}</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Month</Text>
-            <Text style={styles.statValue}>₹{earnings.month}</Text>
+      <ScrollView
+        style={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Main Earnings Card */}
+        <View style={styles.mainCard}>
+          <Text style={styles.mainLabel}>
+            {selectedPeriod === 'today' ? "Today's" : selectedPeriod === 'week' ? 'This Week' : 'This Month'}
+          </Text>
+          <Text style={[styles.mainAmount, { color: driverColor }]}>₹{getPeriodEarnings().toLocaleString()}</Text>
+          
+          {/* Period Tabs */}
+          <View style={styles.periodTabs}>
+            {['today', 'week', 'month'].map((period) => (
+              <TouchableOpacity
+                key={period}
+                style={[styles.periodTab, selectedPeriod === period && { backgroundColor: driverColor }]}
+                onPress={() => setSelectedPeriod(period)}
+              >
+                <Text style={[styles.periodTabText, selectedPeriod === period && { color: '#fff' }]}>
+                  {period === 'today' ? 'Today' : period === 'week' ? 'Week' : 'Month'}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
-      </View>
 
-      <View style={styles.periodSelector}>
-        {renderPeriodButton('today', 'Today')}
-        {renderPeriodButton('week', 'This Week')}
-        {renderPeriodButton('month', 'This Month')}
-      </View>
-
-      <View style={styles.transactionsSection}>
-        <Text style={styles.sectionTitle}>Transactions</Text>
-        
-        {transactions.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>💰</Text>
-            <Text style={styles.emptyText}>No transactions yet</Text>
+        {/* Weekly Bar Chart */}
+        <View style={styles.chartCard}>
+          <Text style={styles.chartTitle}>Weekly Overview</Text>
+          <View style={styles.barChart}>
+            {weeklyData.map((item, index) => (
+              <View key={index} style={styles.barContainer}>
+                <Text style={styles.barValue}>₹{item.amount}</Text>
+                <View style={[styles.bar, { height: (item.amount / maxAmount) * 80, backgroundColor: index === 5 ? driverColor : '#E5E7EB' }]} />
+                <Text style={styles.barLabel}>{item.day}</Text>
+              </View>
+            ))}
           </View>
-        ) : (
-          <FlatList
-            data={transactions}
-            renderItem={renderTransaction}
-            keyExtractor={(item) => item._id}
-            scrollEnabled={false}
-          />
-        )}
-      </View>
+        </View>
 
-      <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>Payment Info</Text>
-        <Text style={styles.infoText}>
-          • Payments are processed every Monday{'\n'}
-          • Minimum payout: ₹100{'\n'}
-          • Earnings include all completed trips{'\n'}
-          • POD charges included in fare
-        </Text>
-      </View>
-    </ScrollView>
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Today</Text>
+            <Text style={[styles.statValue, { color: driverColor }]}>₹{earnings.today}</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>This Month</Text>
+            <Text style={[styles.statValue, { color: driverColor }]}>₹{earnings.month.toLocaleString()}</Text>
+          </View>
+        </View>
+
+        {/* Transactions */}
+        <View style={styles.transSection}>
+          <Text style={styles.transTitle}>Recent Transactions</Text>
+          
+          {transactions.map((item) => (
+            <View key={item._id} style={styles.transItem}>
+              <View style={styles.transLeft}>
+                <Text style={styles.transId}>#{item.orderId}</Text>
+                <Text style={styles.transDate}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+              </View>
+              <View style={styles.transRight}>
+                <Text style={[styles.transAmount, { color: driverColor }]}>+₹{item.amount}</Text>
+                <Pill label={item.status} variant="green" />
+              </View>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  header: {
-    padding: 20,
-    backgroundColor: '#4CAF50',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  earningsCard: {
-    backgroundColor: '#fff',
-    margin: 20,
-    padding: 25,
-    borderRadius: 16,
-    alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  earningsLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  earningsAmount: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-    marginVertical: 10,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    marginTop: 20,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 5,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: '#eee',
-  },
-  periodSelector: {
-    flexDirection: 'row',
-    marginHorizontal: 20,
-    marginBottom: 20,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 5,
-  },
-  periodButton: {
-    flex: 1,
-    padding: 10,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  periodButtonActive: {
-    backgroundColor: '#4CAF50',
-  },
-  periodButtonText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  periodButtonTextActive: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  transactionsSection: {
-    padding: 20,
-    paddingTop: 0,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 15,
-  },
-  transactionItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  transactionInfo: {
-    flex: 1,
-  },
-  transactionId: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  transactionDate: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 3,
-  },
-  transactionRight: {
-    alignItems: 'flex-end',
-  },
-  transactionAmount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-  },
-  transactionStatus: {
-    fontSize: 12,
-    color: '#4CAF50',
-    marginTop: 3,
-    textTransform: 'capitalize',
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: 30,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 10,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#999',
-  },
-  infoCard: {
-    backgroundColor: '#e8f5e9',
-    margin: 20,
-    padding: 20,
-    borderRadius: 12,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 22,
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
+  header: { padding: 16, paddingTop: 40, paddingBottom: 24 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: '#fff' },
+  headerSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
+  content: { flex: 1, borderTopLeftRadius: 22, borderTopRightRadius: 22, marginTop: -14, backgroundColor: '#fff', paddingTop: 16 },
+  mainCard: { marginHorizontal: 16, backgroundColor: '#F9FAFB', borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 16 },
+  mainLabel: { fontSize: 12, color: '#6B7280', fontWeight: '600' },
+  mainAmount: { fontSize: 36, fontWeight: '800', marginVertical: 8 },
+  periodTabs: { flexDirection: 'row', backgroundColor: '#E5E7EB', borderRadius: 10, padding: 4, marginTop: 8 },
+  periodTab: { paddingVertical: 6, paddingHorizontal: 16, borderRadius: 8 },
+  periodTabText: { fontSize: 12, fontWeight: '700', color: '#6B7280' },
+  chartCard: { marginHorizontal: 16, backgroundColor: '#F9FAFB', borderRadius: 16, padding: 16, marginBottom: 16 },
+  chartTitle: { fontSize: 14, fontWeight: '700', marginBottom: 16 },
+  barChart: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 100 },
+  barContainer: { alignItems: 'center', flex: 1 },
+  barValue: { fontSize: 8, color: '#6B7280', marginBottom: 4 },
+  bar: { width: 24, borderRadius: 4, minHeight: 4 },
+  barLabel: { fontSize: 10, color: '#6B7280', marginTop: 6 },
+  statsRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginBottom: 16 },
+  statCard: { flex: 1, backgroundColor: '#F9FAFB', borderRadius: 14, padding: 14 },
+  statLabel: { fontSize: 11, color: '#6B7280', marginBottom: 4 },
+  statValue: { fontSize: 18, fontWeight: '800' },
+  transSection: { paddingHorizontal: 16, paddingBottom: 20 },
+  transTitle: { fontSize: 15, fontWeight: '800', marginBottom: 12 },
+  transItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  transLeft: {},
+  transId: { fontSize: 13, fontWeight: '700', color: '#374151' },
+  transDate: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
+  transRight: { alignItems: 'flex-end' },
+  transAmount: { fontSize: 15, fontWeight: '800', marginBottom: 4 },
 });
 
 export default EarningsScreen;

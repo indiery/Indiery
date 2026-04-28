@@ -1,6 +1,12 @@
 import client from './client';
 
 export const pricingApi = {
+  // Geocode address to coordinates
+  geocode: async (address) => {
+    const response = await client.post('/pricing/geocode', { address });
+    return response.data;
+  },
+
   // Get price estimate
   getEstimate: async (pickup, drop, vehicleType, deliveryType = 'intracity', goodsType, weight) => {
     const response = await client.post('/pricing/estimate', {

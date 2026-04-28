@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { updateProfile } from '../../api/driver.api';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { driverApi } from '../../api/driver.api';
 import { useAuth } from '../../context/AuthContext';
+import colors from '../../theme/colors';
+import Pill from '../../components/common/Pill';
 
 const DriverProfileScreen = ({ navigation }) => {
   const { user, profile, logout } = useAuth();
@@ -13,10 +15,34 @@ const DriverProfileScreen = ({ navigation }) => {
     vehicleNumber: profile?.vehicleNumber || '',
     vehicleModel: profile?.vehicleModel || ''
   });
+  const [driverStats, setDriverStats] = useState({ rating: 0, trips: 0, earnings: 0 });
+
+  const driverColor = colors.role.driver.primary;
+
+  useEffect(() => {
+    const fetchDriverStats = async () => {
+      try {
+        const [profileRes, earningsRes] = await Promise.all([
+          driverApi.getProfile(),
+          driverApi.getEarnings()
+        ]);
+        if (profileRes.success) {
+          setDriverStats({
+            rating: profileRes.driver?.rating || 0,
+            trips: profileRes.driver?.totalTrips || 0,
+            earnings: earningsRes.success ? earningsRes.totalEarnings || 0 : 0
+          });
+        }
+      } catch (error) {
+        console.log('Fetch driver stats error:', error);
+      }
+    };
+    fetchDriverStats();
+  }, []);
 
   const handleSave = async () => {
     try {
-      await updateProfile(formData);
+      await driverApi.updateProfile(formData);
       Alert.alert('Success', 'Profile updated successfully');
       setEditing(false);
     } catch (error) {
@@ -37,8 +63,8 @@ const DriverProfileScreen = ({ navigation }) => {
 
   const menuItems = [
     { icon: '👤', label: 'Edit Profile', onPress: () => setEditing(!editing) },
-    { icon: '�', label: 'Training', onPress: () => navigation.navigate('Training') },
-    { icon: '�🚗', label: 'My Vehicle', onPress: () => navigation.navigate('Vehicle') },
+    { icon: '🎓', label: 'Training', onPress: () => Alert.alert('Training', 'Coming soon') },
+    { icon: '🚗', label: 'My Vehicle', onPress: () => Alert.alert('Vehicle', 'Coming soon') },
     { icon: '📄', label: 'Documents', onPress: () => navigation.navigate('Documents') },
     { icon: '💰', label: 'Earnings', onPress: () => navigation.navigate('Earnings') },
     { icon: '🔔', label: 'Notifications', onPress: () => Alert.alert('Notifications', 'Coming soon') },
@@ -48,21 +74,39 @@ const DriverProfileScreen = ({ navigation }) => {
   ];
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: driverColor }]}>
         <View style={styles.avatarContainer}>
-          <Text style={styles.avatar}>
-            {profile?.name?.charAt(0)?.toUpperCase() || 'D'}
-          </Text>
+          {profile?.profileImage ? (
+            <Image source={{ uri: profile.profileImage }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatar}>
+              {profile?.name?.charAt(0)?.toUpperCase() || 'D'}
+            </Text>
+          )}
         </View>
-        <Text style={styles.name}>{profile?.name || 'Driver'}</Text>
-        <Text style={styles.phone}>{profile?.phone || 'N/A'}</Text>
-        <View style={styles.ratingContainer}>
-          <Text style={styles.rating}>⭐ {profile?.rating?.toFixed(1) || '0.0'}</Text>
-          <Text style={styles.ratingText}>{profile?.totalTrips || 0} trips</Text>
+        <Text style={styles.name}>{profile?.name || 'Driver Name'}</Text>
+        <Text style={styles.phone}>+91 {profile?.phone || ''}</Text>
+        
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{driverStats.rating.toFixed(1)}⭐</Text>
+            <Text style={styles.statLabel}>Rating</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{driverStats.trips}</Text>
+            <Text style={styles.statLabel}>Trips</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>₹{driverStats.earnings.toLocaleString()}</Text>
+            <Text style={styles.statLabel}>Earned</Text>
+          </View>
         </View>
       </View>
 
+      {/* Edit Form */}
       {editing && (
         <View style={styles.editForm}>
           <Text style={styles.editTitle}>Edit Profile</Text>
@@ -128,7 +172,7 @@ const DriverProfileScreen = ({ navigation }) => {
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-              style={styles.saveButton}
+              style={[styles.saveButton, { backgroundColor: driverColor }]}
               onPress={handleSave}
             >
               <Text style={styles.saveButtonText}>Save</Text>
@@ -137,24 +181,8 @@ const DriverProfileScreen = ({ navigation }) => {
         </View>
       )}
 
-      <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{profile?.totalTrips || 0}</Text>
-          <Text style={styles.statLabel}>Total Trips</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{profile?.totalEarnings?.toFixed(0) || 0}</Text>
-          <Text style={styles.statLabel}>Total Earnings</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{profile?.rating?.toFixed(1) || '0.0'}</Text>
-          <Text style={styles.statLabel}>Rating</Text>
-        </View>
-      </View>
-
-      <View style={styles.menuSection}>
+      {/* Menu Section */}
+      <ScrollView style={styles.menuSection} contentContainerStyle={styles.menuContent}>
         {menuItems.map((item, index) => (
           <TouchableOpacity 
             key={index} 
@@ -166,199 +194,52 @@ const DriverProfileScreen = ({ navigation }) => {
             <Text style={styles.menuArrow}>›</Text>
           </TouchableOpacity>
         ))}
-      </View>
 
-      <TouchableOpacity 
-        style={styles.logoutButton}
-        onPress={handleLogout}
-      >
-        <Text style={styles.logoutText}>Logout</Text>
-      </TouchableOpacity>
+        {/* Logout Button */}
+        <TouchableOpacity 
+          style={[styles.logoutButton, { borderColor: driverColor }]}
+          onPress={handleLogout}
+        >
+          <Text style={[styles.logoutText, { color: driverColor }]}>🚪 Logout</Text>
+        </TouchableOpacity>
 
-      <Text style={styles.version}>Version 1.0.0</Text>
-    </ScrollView>
+        <Text style={styles.version}>Version 1.0.0</Text>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  header: {
-    backgroundColor: '#2196F3',
-    padding: 30,
-    alignItems: 'center',
-  },
-  avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  avatar: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#2196F3',
-  },
-  name: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  phone: {
-    fontSize: 14,
-    color: '#fff',
-    opacity: 0.9,
-    marginTop: 5,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  rating: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  ratingText: {
-    fontSize: 14,
-    color: '#fff',
-    opacity: 0.9,
-    marginLeft: 10,
-  },
-  editForm: {
-    backgroundColor: '#fff',
-    margin: 20,
-    padding: 20,
-    borderRadius: 12,
-  },
-  editTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  inputGroup: {
-    marginBottom: 15,
-  },
-  inputLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 5,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  editButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  cancelButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    color: '#666',
-  },
-  saveButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    backgroundColor: '#2196F3',
-  },
-  saveButtonText: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    margin: 20,
-    marginTop: 0,
-    padding: 20,
-    borderRadius: 12,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 5,
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: '#eee',
-  },
-  menuSection: {
-    backgroundColor: '#fff',
-    marginHorizontal: 20,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  menuIcon: {
-    fontSize: 20,
-    marginRight: 15,
-  },
-  menuLabel: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-  },
-  menuArrow: {
-    fontSize: 20,
-    color: '#999',
-  },
-  logoutButton: {
-    backgroundColor: '#fff',
-    margin: 20,
-    padding: 15,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#f44336',
-  },
-  logoutText: {
-    fontSize: 16,
-    color: '#f44336',
-    fontWeight: 'bold',
-  },
-  version: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 30,
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
+  header: { padding: 16, paddingTop: 40, paddingBottom: 24, alignItems: 'center' },
+  avatarContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  avatar: { fontSize: 32, fontWeight: '800', color: '#059669' },
+  avatarImage: { width: 80, height: 80, borderRadius: 40 },
+  name: { fontSize: 20, fontWeight: '800', color: '#fff', marginBottom: 2 },
+  phone: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginBottom: 16 },
+  statsRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 12, width: '100%' },
+  statBox: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  statLabel: { fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
+  editForm: { backgroundColor: '#F9FAFB', margin: 16, borderRadius: 16, padding: 16 },
+  editTitle: { fontSize: 16, fontWeight: '800', marginBottom: 16, color: '#374151' },
+  inputGroup: { marginBottom: 12 },
+  inputLabel: { fontSize: 12, fontWeight: '600', color: '#6B7280', marginBottom: 4 },
+  input: { backgroundColor: '#fff', borderRadius: 10, padding: 12, fontSize: 14, borderWidth: 1, borderColor: '#E5E7EB' },
+  editButtons: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  cancelButton: { flex: 1, padding: 14, borderRadius: 10, alignItems: 'center', backgroundColor: '#E5E7EB' },
+  cancelButtonText: { fontSize: 14, fontWeight: '700', color: '#6B7280' },
+  saveButton: { flex: 1, padding: 14, borderRadius: 10, alignItems: 'center' },
+  saveButtonText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  menuSection: { flex: 1 },
+  menuContent: { padding: 16 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 14, padding: 14, marginBottom: 10 },
+  menuIcon: { fontSize: 20, marginRight: 12 },
+  menuLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: '#374151' },
+  menuArrow: { fontSize: 20, color: '#9CA3AF' },
+  logoutButton: { borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, marginTop: 10 },
+  logoutText: { fontSize: 14, fontWeight: '700' },
+  version: { textAlign: 'center', fontSize: 11, color: '#9CA3AF', marginTop: 20, marginBottom: 30 },
 });
 
 export default DriverProfileScreen;

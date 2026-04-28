@@ -3,6 +3,7 @@ import {
   getEstimate,
   listVehicles,
   listGoodsTypes,
+  geocode,
 } from '../controllers/pricingController.js';
 import { verifyFirebaseToken } from '../middleware/authMiddleware.js';
 
@@ -12,7 +13,10 @@ const router = Router();
 router.get('/vehicles', listVehicles);
 router.get('/goods', listGoodsTypes);
 
-// Estimate is auth-protected (so we can use customer's coin balance)
-router.post('/estimate', verifyFirebaseToken, getEstimate);
+// Geocode address to coordinates (public)
+router.post('/geocode', geocode);
+
+// Estimate is temporarily public for testing
+router.post('/estimate', getEstimate);
 
 export default router;

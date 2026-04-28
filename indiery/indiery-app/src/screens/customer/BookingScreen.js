@@ -1,8 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import orderApi from '../../api/order.api';
 import pricingApi from '../../api/pricing.api';
 import { useAuth } from '../../context/AuthContext';
+import { colors } from '../../theme/colors';
+import { borderRadius, shadows, spacing } from '../../theme/spacing';
+import Button from '../../components/common/Button';
+import ProgressStep from '../../components/customer/ProgressStep';
+import VehicleSelector from '../../components/customer/VehicleSelector';
+import PriceBreakdown from '../../components/customer/PriceBreakdown';
 
 const NON_DELIVERABLE_GOODS = [
   'Illegal items',
@@ -15,36 +21,28 @@ const NON_DELIVERABLE_GOODS = [
   'Toxic substances',
 ];
 
+// Mock vehicle data
+const VEHICLES = [
+  { code: 'bike', label: 'Bike', icon: '🏍️', capacity: 'Up to 20kg', price: '₹30/km' },
+  { code: 'mini_500', label: 'Mini 500kg', icon: '🚛', capacity: 'Up to 500kg', price: '₹50/km' },
+  { code: 'mini_750', label: 'Mini 750kg', icon: '🚛', capacity: 'Up to 750kg', price: '₹70/km' },
+];
+
 const BookingScreen = ({ navigation }) => {
   const { profile } = useAuth();
   const [step, setStep] = useState(1);
-  const [deliveryType, setDeliveryType] = useState('intracity'); // 'intracity' or 'intercity'
+  const [deliveryType, setDeliveryType] = useState('intracity');
   const [pickup, setPickup] = useState({ address: '', lat: null, lng: null });
   const [drop, setDrop] = useState({ address: '', lat: null, lng: null });
-  const [vehicleType, setVehicleType] = useState(null);
+  const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [goodsType, setGoodsType] = useState('');
   const [weight, setWeight] = useState('');
   const [estimate, setEstimate] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [vehicles, setVehicles] = useState([]);
   const [showGoodsWarning, setShowGoodsWarning] = useState(false);
-
-  useEffect(() => {
-    fetchVehicles();
-  }, [deliveryType]);
-
-  const fetchVehicles = async () => {
-    try {
-      const response = await pricingApi.getVehicles(deliveryType);
-      setVehicles(response.data?.vehicles || []);
-    } catch (error) {
-      console.log('Fetch vehicles error:', error);
-    }
-  };
 
   const checkGoodsType = (text) => {
     setGoodsType(text);
-    // Check if goods type matches any non-deliverable item
     const isNonDeliverable = NON_DELIVERABLE_GOODS.some(item => 
       text.toLowerCase().includes(item.toLowerCase())
     );
@@ -52,12 +50,11 @@ const BookingScreen = ({ navigation }) => {
   };
 
   const getEstimate = async () => {
-    if (!pickup.lat || !drop.lat || !vehicleType || !weight) {
+    if (!pickup.address || !drop.address || !selectedVehicle || !weight) {
       Alert.alert('Error', 'Please fill all fields');
       return;
     }
 
-    // Check for non-deliverable goods
     const isNonDeliverable = NON_DELIVERABLE_GOODS.some(item => 
       goodsType.toLowerCase().includes(item.toLowerCase())
     );
@@ -68,39 +65,78 @@ const BookingScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const response = await pricingApi.getEstimate(
-        pickup,
-        drop,
-        vehicleType,
+      // Geocode addresses to get coordinates
+      const [pickupGeo, dropGeo] = await Promise.all([
+        pricingApi.geocode(pickup.address),
+        pricingApi.geocode(drop.address),
+      ]);
+
+      if (!pickupGeo.success || !dropGeo.success) {
+        throw new Error('Failed to geocode addresses');
+      }
+
+      // Get price estimate from backend
+      const result = await pricingApi.getEstimate(
+        { coordinates: pickupGeo.coordinates },
+        { coordinates: dropGeo.coordinates },
+        selectedVehicle.code,
         deliveryType,
         goodsType,
         parseFloat(weight)
       );
-      setEstimate(response.data.estimate);
-      setStep(3);
+
+      if (result.success) {
+        setEstimate(result.estimate);
+        // Store coordinates for order creation
+        setPickup({ ...pickup, lat: pickupGeo.coordinates[1], lng: pickupGeo.coordinates[0] });
+        setDrop({ ...drop, lat: dropGeo.coordinates[1], lng: dropGeo.coordinates[0] });
+        setStep(3);
+      } else {
+        throw new Error(result.message || 'Failed to get estimate');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to get estimate');
+      console.error('Estimate error:', error);
+      Alert.alert('Error', error.message || 'Failed to get estimate. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const createOrder = async () => {
+    if (!pickup.lng || !drop.lng || !selectedVehicle) {
+      Alert.alert('Error', 'Missing location data. Please get estimate first.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await orderApi.createOrder({
-        pickup,
-        drop,
-        vehicleType,
-        deliveryType,
+      const orderData = {
+        vehicleType: selectedVehicle.code,
+        pickup: {
+          address: pickup.address,
+          coordinates: [pickup.lng, pickup.lat],
+        },
+        drop: {
+          address: drop.address,
+          coordinates: [drop.lng, drop.lat],
+        },
         goodsType,
         weight: parseFloat(weight),
-      });
-      Alert.alert('Success', 'Order created!', [
-        { text: 'OK', onPress: () => navigation.replace('Tracking', { orderId: response.data._id }) }
-      ]);
+        paymentMethod: 'upi',
+      };
+
+      const result = await orderApi.createOrder(orderData);
+
+      if (result.success) {
+        Alert.alert('Success', 'Order created!', [
+          { text: 'OK', onPress: () => navigation.replace('Tracking', { orderId: result.order.orderId }) }
+        ]);
+      } else {
+        throw new Error(result.message || 'Failed to create order');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to create order');
+      console.error('Create order error:', error);
+      Alert.alert('Error', error.message || 'Failed to create order. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -155,13 +191,13 @@ const BookingScreen = ({ navigation }) => {
         />
       </View>
 
-      <TouchableOpacity
-        style={[styles.button, (!pickup.address || !drop.address) && styles.buttonDisabled]}
+      <Button
+        title="Next"
+        variant="primary"
         onPress={() => setStep(2)}
         disabled={!pickup.address || !drop.address}
-      >
-        <Text style={styles.buttonText}>Next</Text>
-      </TouchableOpacity>
+        style={styles.nextButton}
+      />
     </View>
   );
 
@@ -170,29 +206,11 @@ const BookingScreen = ({ navigation }) => {
       <Text style={styles.stepTitle}>Select Vehicle & Goods</Text>
       
       <Text style={styles.label}>Vehicle Type</Text>
-      <View style={styles.vehicleGrid}>
-        {vehicles.map((vehicle) => (
-          <TouchableOpacity
-            key={vehicle.code}
-            style={[
-              styles.vehicleCard,
-              vehicleType === vehicle.code && styles.vehicleCardSelected,
-            ]}
-            onPress={() => setVehicleType(vehicle.code)}
-          >
-            <Text style={styles.vehicleIcon}>
-              {vehicle.code === 'bike' ? '🏍️' : '🚚'}
-            </Text>
-            <Text style={styles.vehicleName}>{vehicle.label}</Text>
-            <Text style={styles.vehicleCapacity}>Up to {vehicle.weightLimitKg}kg</Text>
-            {vehicle.perKm && (
-              <Text style={styles.vehiclePrice}>
-                {vehicle.basePrice > 0 ? `₹${vehicle.basePrice} + ₹${vehicle.perKm}/km` : `₹${vehicle.perKm}/km`}
-              </Text>
-            )}
-          </TouchableOpacity>
-        ))}
-      </View>
+      <VehicleSelector
+        vehicles={VEHICLES}
+        selected={selectedVehicle}
+        onSelect={setSelectedVehicle}
+      />
 
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Goods Type</Text>
@@ -229,13 +247,13 @@ const BookingScreen = ({ navigation }) => {
         />
       </View>
 
-      <TouchableOpacity
-        style={[styles.button, loading && styles.buttonDisabled]}
+      <Button
+        title={loading ? 'Calculating...' : 'Get Estimate'}
+        variant="primary"
         onPress={getEstimate}
-        disabled={loading || !vehicleType || !weight}
-      >
-        <Text style={styles.buttonText}>{loading ? 'Calculating...' : 'Get Estimate'}</Text>
-      </TouchableOpacity>
+        disabled={loading || !selectedVehicle || !weight}
+        style={styles.nextButton}
+      />
     </View>
   );
 
@@ -243,318 +261,236 @@ const BookingScreen = ({ navigation }) => {
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Price Estimate</Text>
       
-      <View style={styles.estimateCard}>
-        <View style={styles.estimateRow}>
-          <Text>Base Price</Text>
-          <Text>₹{estimate?.basePrice || 0}</Text>
-        </View>
-        <View style={styles.estimateRow}>
-          <Text>Distance ({estimate?.distanceKm?.toFixed(1)}km @ ₹{estimate?.perKm}/km)</Text>
-          <Text>₹{estimate?.distancePrice || 0}</Text>
-        </View>
-        {estimate?.discount > 0 && (
-          <View style={styles.estimateRow}>
-            <Text style={styles.discountText}>Coupon Discount</Text>
-            <Text style={styles.discountText}>-₹{estimate?.discount || 0}</Text>
-          </View>
-        )}
-        {estimate?.coinDiscount > 0 && (
-          <View style={styles.estimateRow}>
-            <Text style={styles.discountText}>Coins Used</Text>
-            <Text style={styles.discountText}>-₹{estimate?.coinDiscount || 0}</Text>
-          </View>
-        )}
-        <View style={styles.estimateRow}>
-          <Text>GST (18%)</Text>
-          <Text>₹{estimate?.gst || 0}</Text>
-        </View>
-        <View style={[styles.estimateRow, styles.estimateSubtotal]}>
-          <Text>Subtotal</Text>
-          <Text>₹{estimate?.subtotal || 0}</Text>
-        </View>
-        <View style={[styles.estimateRow, styles.estimateTotal]}>
-          <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalPrice}>₹{estimate?.total || 0}</Text>
-        </View>
-      </View>
-
-      {/* Commission breakdown (for transparency) */}
-      <View style={styles.commissionCard}>
-        <Text style={styles.commissionTitle}>Price Breakdown</Text>
-        <View style={styles.commissionRow}>
-          <Text>Driver Commission (80%)</Text>
-          <Text>₹{estimate?.driverCommission || 0}</Text>
-        </View>
-        <View style={styles.commissionRow}>
-          <Text>Indiery Commission (15%)</Text>
-          <Text>₹{estimate?.indieryCommission || 0}</Text>
-        </View>
-        <View style={styles.commissionRow}>
-          <Text>Reserve (5%)</Text>
-          <Text>₹{estimate?.reserveAmount || 0}</Text>
-        </View>
-        <Text style={styles.commissionNote}>
-          * 5% reserve goes to driver as reward if delivery is on time
-        </Text>
-      </View>
+      {estimate && (
+        <PriceBreakdown estimate={estimate} />
+      )}
 
       <View style={styles.buttonRow}>
-        <TouchableOpacity
-          style={[styles.button, styles.buttonSecondary]}
+        <Button
+          title="Back"
+          variant="secondary"
           onPress={() => setStep(2)}
-        >
-          <Text style={styles.buttonText}>Back</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
+          style={styles.backButton}
+        />
+        <Button
+          title={loading ? 'Creating...' : 'Book Now'}
+          variant="primary"
           onPress={createOrder}
           disabled={loading}
-        >
-          <Text style={styles.buttonText}>{loading ? 'Creating...' : 'Book Now'}</Text>
-        </TouchableOpacity>
+          style={styles.bookButton}
+        />
       </View>
     </View>
   );
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.progress}>
-        {[1, 2, 3].map((s) => (
-          <View key={s} style={[styles.progressDot, step >= s && styles.progressDotActive]} />
-        ))}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backBtnText}>←</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Book Delivery</Text>
+        <View style={styles.headerSpacer} />
       </View>
-      {step === 1 && renderStep1()}
-      {step === 2 && renderStep2()}
-      {step === 3 && renderStep3()}
-    </ScrollView>
+
+      {/* Progress Steps */}
+      <View style={styles.progressContainer}>
+        <ProgressStep 
+          step={1} 
+          currentStep={step} 
+          title="Vehicle" 
+          icon="🚛"
+        />
+        <View style={styles.progressLine} />
+        <ProgressStep 
+          step={2} 
+          currentStep={step} 
+          title="Addresses" 
+          icon="📍"
+        />
+        <View style={styles.progressLine} />
+        <ProgressStep 
+          step={3} 
+          currentStep={step} 
+          title="Payment" 
+          icon="💳"
+        />
+      </View>
+
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {step === 1 && renderStep1()}
+        {step === 2 && renderStep2()}
+        {step === 3 && renderStep3()}
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
-  progress: {
+  scrollView: {
+    flex: 1,
+  },
+  // Header
+  header: {
+    backgroundColor: colors.primary,
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl + 10,
+    paddingBottom: spacing.lg,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
   },
-  progressDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#ddd',
-    marginHorizontal: 5,
+  backBtnText: {
+    fontSize: 20,
+    color: colors.white,
+    fontWeight: '700',
   },
-  progressDotActive: {
-    backgroundColor: '#4CAF50',
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.white,
   },
+  headerSpacer: {
+    width: 36,
+  },
+
+  // Progress
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.white,
+    ...shadows.sm,
+  },
+  progressLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: colors.border,
+    marginHorizontal: spacing.xs,
+  },
+
+  // Step Container
   stepContainer: {
-    padding: 20,
+    padding: spacing.lg,
   },
   stepTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginBottom: spacing.lg,
   },
   label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
-    color: '#333',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
+    color: colors.textPrimary,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 15,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: 14,
+    marginBottom: spacing.md,
+    backgroundColor: colors.white,
+    color: colors.textPrimary,
   },
   deliveryTypeRow: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
+    gap: spacing.md,
   },
   deliveryTypeBtn: {
     flex: 1,
-    padding: 15,
-    borderRadius: 8,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
     borderWidth: 2,
-    borderColor: '#ddd',
-    marginHorizontal: 5,
+    borderColor: colors.border,
     alignItems: 'center',
+    backgroundColor: colors.white,
   },
   deliveryTypeActive: {
-    borderColor: '#4CAF50',
-    backgroundColor: '#E8F5E9',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
   },
   deliveryTypeText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textSecondary,
   },
   deliveryTypeTextActive: {
-    color: '#4CAF50',
+    color: colors.primary,
   },
   deliveryTypeDesc: {
-    fontSize: 12,
-    color: '#999',
+    fontSize: 11,
+    color: colors.textMuted,
     marginTop: 4,
-  },
-  vehicleGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 20,
-  },
-  vehicleCard: {
-    width: '47%',
-    padding: 15,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#ddd',
-    marginBottom: 10,
-    marginHorizontal: '1%',
-    alignItems: 'center',
-  },
-  vehicleCardSelected: {
-    borderColor: '#4CAF50',
-    backgroundColor: '#E8F5E9',
-  },
-  vehicleIcon: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  vehicleName: {
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  vehicleCapacity: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
-  vehiclePrice: {
-    fontSize: 12,
-    color: '#4CAF50',
-    marginTop: 4,
-    fontWeight: '600',
   },
   warningBox: {
-    backgroundColor: '#FFF3CD',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 15,
+    backgroundColor: colors.warningLight,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
   },
   warningText: {
-    color: '#856404',
+    color: '#92400E',
     fontWeight: '600',
+    fontSize: 12,
   },
   infoBox: {
-    backgroundColor: '#F8F9FA',
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 15,
+    backgroundColor: colors.background,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
   },
   infoTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#666',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
+    color: colors.textSecondary,
   },
   infoText: {
-    fontSize: 12,
-    color: '#999',
-    marginLeft: 8,
+    fontSize: 11,
+    color: colors.textMuted,
+    marginLeft: spacing.sm,
   },
   infoMore: {
-    fontSize: 12,
-    color: '#4CAF50',
+    fontSize: 11,
+    color: colors.primary,
     marginTop: 4,
-    marginLeft: 8,
-  },
-  button: {
-    backgroundColor: '#4CAF50',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  buttonSecondary: {
-    backgroundColor: '#666',
-    flex: 1,
-    marginHorizontal: 5,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
+    marginLeft: spacing.sm,
     fontWeight: '600',
+  },
+  nextButton: {
+    marginTop: spacing.md,
   },
   buttonRow: {
     flexDirection: 'row',
-    marginTop: 20,
+    gap: spacing.md,
+    marginTop: spacing.lg,
   },
-  estimateCard: {
-    backgroundColor: '#F8F9FA',
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 15,
+  backButton: {
+    flex: 1,
   },
-  estimateRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  estimateSubtotal: {
-    borderTopWidth: 1,
-    borderTopColor: '#ddd',
-    marginTop: 8,
-  },
-  estimateTotal: {
-    borderTopWidth: 2,
-    borderTopColor: '#4CAF50',
-    marginTop: 8,
-    paddingTop: 12,
-  },
-  totalLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  totalPrice: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-  },
-  discountText: {
-    color: '#4CAF50',
-  },
-  commissionCard: {
-    backgroundColor: '#E3F2FD',
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 15,
-  },
-  commissionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 10,
-    color: '#1565C0',
-  },
-  commissionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-    fontSize: 12,
-    color: '#666',
-  },
-  commissionNote: {
-    fontSize: 11,
-    color: '#666',
-    marginTop: 8,
-    fontStyle: 'italic',
+  bookButton: {
+    flex: 2,
   },
 });
 

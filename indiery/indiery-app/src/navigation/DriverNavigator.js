@@ -6,12 +6,15 @@ import { StyleSheet, Text, View } from 'react-native';
 import ActiveOrderScreen from '../screens/driver/ActiveOrderScreen';
 import DocumentsScreen from '../screens/driver/DocumentsScreen';
 import DriverHomeScreen from '../screens/driver/DriverHomeScreen';
+import DriverOrdersScreen from '../screens/driver/DriverOrdersScreen';
 import DriverProfileScreen from '../screens/driver/DriverProfileScreen';
 import DriverTrainingScreen from '../screens/driver/DriverTrainingScreen';
 import EarningsScreen from '../screens/driver/EarningsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+
+const driverColor = '#059669';
 
 const TabIcon = ({ icon, focused }) => (
   <View style={styles.tabIconContainer}>
@@ -31,6 +34,7 @@ const DriverStack = () => (
     <Stack.Screen name="Documents" component={DocumentsScreen} />
     <Stack.Screen name="Profile" component={DriverProfileScreen} />
     <Stack.Screen name="Training" component={DriverTrainingScreen} />
+    <Stack.Screen name="Orders" component={DriverOrdersScreen} />
   </Stack.Navigator>
 );
 
@@ -39,7 +43,7 @@ const DriverNavigator = () => (
     screenOptions={{
       headerShown: false,
       tabBarStyle: styles.tabBar,
-      tabBarActiveTintColor: '#2196F3',
+      tabBarActiveTintColor: driverColor,
       tabBarInactiveTintColor: '#999',
       tabBarLabelStyle: styles.tabLabel,
     }}
@@ -50,6 +54,14 @@ const DriverNavigator = () => (
       options={{
         tabBarLabel: 'Home',
         tabBarIcon: ({ focused }) => <TabIcon icon="🏠" focused={focused} />,
+      }}
+    />
+    <Tab.Screen
+      name="Orders"
+      component={DriverOrdersScreen}
+      options={{
+        tabBarLabel: 'Orders',
+        tabBarIcon: ({ focused }) => <TabIcon icon="📦" focused={focused} />,
       }}
     />
     <Tab.Screen

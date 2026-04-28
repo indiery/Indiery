@@ -6,7 +6,7 @@ const userSchema = new mongoose.Schema(
     name: { type: String, trim: true },
     email: { type: String, lowercase: true, trim: true, sparse: true },
     phone: { type: String, sparse: true, index: true },
-    role: { type: String, enum: ['individual', 'driver'], required: true },
+    role: { type: String, enum: ['individual', 'driver', null], default: null },
     profileImage: { type: String, default: null },
     address: {
       line1: String,

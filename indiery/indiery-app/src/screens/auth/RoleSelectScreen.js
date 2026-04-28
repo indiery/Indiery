@@ -1,11 +1,10 @@
 import React from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import authApi from '../../api/auth.api';
 import { useAuth } from '../../context/AuthContext';
 import { getIdToken } from '../../services/firebase';
 
 const RoleSelectScreen = ({ navigation }) => {
-  const { profile, refreshProfile, user } = useAuth();
+  const { profile, refreshProfile, user, completeRegistration } = useAuth();
 
   const selectRole = async (role) => {
     try {
@@ -16,8 +15,8 @@ const RoleSelectScreen = ({ navigation }) => {
         return;
       }
       
-      // Update user role in backend
-      await authApi.register(firebaseToken, { role });
+      // Complete registration with role
+      await completeRegistration(firebaseToken, { role });
       await refreshProfile();
       
       // Reset navigation to the appropriate navigator

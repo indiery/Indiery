@@ -6,7 +6,7 @@ const OTPScreen = ({ navigation, route }) => {
   const { confirmation, phone } = route.params;
   const [otp, setOtp] = useState(['', '', '', '']);
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, needsRoleSelection } = useAuth();
   const inputRefs = useRef([]);
 
   const handleOtpChange = (value, index) => {
@@ -32,11 +32,16 @@ const OTPScreen = ({ navigation, route }) => {
       const result = await confirmation.confirm(otpString);
       const firebaseToken = await result.user.getIdToken();
       
-      // Login to backend
-      await login(firebaseToken);
+      // Login to backend - this now returns needsRoleSelection flag
+      const response = await login(firebaseToken);
       
-      // Navigate to role selection
-      navigation.replace('RoleSelect');
+      // Check if user needs to select role
+      if (response.needsRoleSelection) {
+        navigation.replace('RoleSelect');
+      } else {
+        // Navigate to main app based on role
+        navigation.replace(response.role === 'driver' ? 'DriverMain' : 'CustomerMain');
+      }
     } catch (error) {
       console.error('OTP Verification Error:', error);
       Alert.alert('Error', 'Invalid OTP. Please try again.');

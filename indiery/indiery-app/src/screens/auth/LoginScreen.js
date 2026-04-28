@@ -39,7 +39,14 @@ const LoginScreen = ({ navigation }) => {
       const result = await signInWithGoogle();
       // Get ID token and send to backend
       const idToken = await result.user.getIdToken();
-      await login(idToken, { whatsappOptIn });
+      const response = await login(idToken, { whatsappOptIn });
+      
+      // Check if user needs to select role
+      if (response.needsRoleSelection) {
+        navigation.replace('RoleSelect');
+      }
+      // Otherwise, AppNavigator will automatically navigate based on profile.role
+      // No manual navigation needed - the useEffect in AuthContext will update profile
     } catch (error) {
       console.error('Google Sign-In Error:', error);
       Alert.alert('Error', 'Failed to sign in with Google. Please try again.');
@@ -53,7 +60,13 @@ const LoginScreen = ({ navigation }) => {
     try {
       const result = await signInWithApple();
       const idToken = await result.user.getIdToken();
-      await login(idToken, { whatsappOptIn });
+      const response = await login(idToken, { whatsappOptIn });
+      
+      // Check if user needs to select role
+      if (response.needsRoleSelection) {
+        navigation.replace('RoleSelect');
+      }
+      // Otherwise, AppNavigator will automatically navigate based on profile.role
     } catch (error) {
       console.error('Apple Sign-In Error:', error);
       Alert.alert('Error', 'Failed to sign in with Apple. Please try again.');

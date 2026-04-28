@@ -1,5 +1,6 @@
 import { COMMISSION, GST_PERCENT, PRICING } from '../utils/constants.js';
 import { round2 } from '../utils/helpers.js';
+import logger from '../utils/logger.js';
 
 /**
  * Intracity price per spec:
@@ -56,7 +57,21 @@ export const buildPriceBreakdown = ({
 }) => {
   let basePrice, distancePrice, perKm;
 
-  if (deliveryType === 'intercity') {
+  // Check if vehicle type is valid for the delivery type
+  const intracityVehicles = ['bike', 'mini_truck_500', 'mini_truck_750'];
+  const intercityVehicles = ['truck_2_tonne', 'truck_3_10_tonne'];
+
+  let effectiveDeliveryType = deliveryType;
+  
+  if (deliveryType === 'intercity' && !intercityVehicles.includes(vehicleType)) {
+    logger.warn(`Vehicle ${vehicleType} not valid for intercity, falling back to intracity pricing`);
+    effectiveDeliveryType = 'intracity';
+  } else if (deliveryType === 'intracity' && !intracityVehicles.includes(vehicleType)) {
+    logger.warn(`Vehicle ${vehicleType} not valid for intracity, falling back to intercity pricing`);
+    effectiveDeliveryType = 'intercity';
+  }
+
+  if (effectiveDeliveryType === 'intercity') {
     const intercity = calculateIntercityPrice(vehicleType, distanceKm);
     basePrice = intercity.basePrice;
     distancePrice = intercity.distancePrice;
@@ -96,7 +111,7 @@ export const buildPriceBreakdown = ({
     indieryCommission,
     reserveAmount,
     distanceKm: round2(distanceKm),
-    deliveryType,
+    deliveryType: effectiveDeliveryType,
   };
 };
 

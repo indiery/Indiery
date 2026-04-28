@@ -9,10 +9,18 @@ export const authApi = {
     return response.data;
   },
 
+  // Complete registration (add role after initial login)
+  completeRegistration: async (firebaseToken, data) => {
+    const response = await client.post('/auth/complete-registration', data, {
+      headers: { Authorization: `Bearer ${firebaseToken}` },
+    });
+    return response.data.user;
+  },
+
   // Get current user profile
   getMe: async () => {
     const response = await client.get('/auth/me');
-    return response.data;
+    return response.data.user;
   },
 
   // Logout

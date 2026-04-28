@@ -1,26 +1,46 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, RefreshControl, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
-import { getActiveOrder, getOrders } from '../../api/driver.api';
+import { Alert, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { driverApi } from '../../api/driver.api';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../hooks/useSocket';
+import colors from '../../theme/colors';
+import OnlineToggle from '../../components/driver/OnlineToggle';
+import EarningCard from '../../components/driver/EarningCard';
+import Pill from '../../components/common/Pill';
 
 const DriverHomeScreen = ({ navigation }) => {
   const { user, profile } = useAuth();
-  const { socket } = useSocket();
+  const socketHook = useSocket();
+  const socket = socketHook?.socket || null;
   const [isOnline, setIsOnline] = useState(profile?.isOnline || false);
   const [activeOrder, setActiveOrder] = useState(null);
   const [recentOrders, setRecentOrders] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [nearbyRequest, setNearbyRequest] = useState(null);
+  const [nearbyOrders, setNearbyOrders] = useState([]);
+  const [todayEarnings, setTodayEarnings] = useState(0);
+  const [totalTrips, setTotalTrips] = useState(0);
+  const [rating, setRating] = useState(0);
+
+  const driverColor = colors.role.driver.primary;
+  const driverLight = colors.role.driver.primaryLight;
 
   const fetchData = async () => {
     try {
-      const [active, orders] = await Promise.all([
-        getActiveOrder(),
-        getOrders({ limit: 5 })
+      const [activeRes, ordersRes, earningsRes, profileRes] = await Promise.all([
+        driverApi.getActiveOrder(),
+        driverApi.getOrders({ limit: 5 }),
+        driverApi.getEarnings(),
+        driverApi.getProfile()
       ]);
-      setActiveOrder(active);
-      setRecentOrders(orders || []);
+      if (activeRes.success) setActiveOrder(activeRes.order);
+      if (ordersRes.success) setRecentOrders(ordersRes.orders || []);
+      if (earningsRes.success) {
+        setTodayEarnings(earningsRes.todayEarnings || 0);
+        setTotalTrips(earningsRes.totalTrips || 0);
+      }
+      if (profileRes.success) {
+        setRating(profileRes.driver?.rating || 0);
+      }
     } catch (error) {
       console.log('Fetch data error:', error);
     }
@@ -34,7 +54,7 @@ const DriverHomeScreen = ({ navigation }) => {
     if (!socket) return;
 
     socket.on('newOrderRequest', (order) => {
-      setNearbyRequest(order);
+      setNearbyOrders(prev => [order, ...prev]);
       Alert.alert(
         'New Order Request!',
         `Pickup: ${order.pickup.address}\nDrop: ${order.dropoff.address}\nFare: ₹${order.estimatedFare}`,
@@ -47,7 +67,7 @@ const DriverHomeScreen = ({ navigation }) => {
 
     socket.on('orderAccepted', (order) => {
       setActiveOrder(order);
-      setNearbyRequest(null);
+      setNearbyOrders(prev => prev.filter(o => o._id !== order._id));
     });
 
     return () => {
@@ -58,17 +78,22 @@ const DriverHomeScreen = ({ navigation }) => {
 
   const handleAcceptOrder = async (orderId) => {
     try {
-      // TODO: Call accept order API
-      Alert.alert('Success', 'Order accepted!');
+      Alert.alert('Success', 'Order accepted! Navigate to pickup');
+      navigation.navigate('ActiveOrder');
     } catch (error) {
       Alert.alert('Error', 'Failed to accept order');
     }
   };
 
+  const handleDeclineOrder = (orderId) => {
+    setNearbyOrders(prev => prev.filter(o => o.id !== orderId));
+    Alert.alert('Declined', 'Order declined');
+  };
+
   const handleToggleOnline = async () => {
     try {
-      // TODO: Call toggle online API
       setIsOnline(!isOnline);
+      Alert.alert(isOnline ? 'Offline' : 'Online', isOnline ? 'You are now offline' : 'You are now online!');
     } catch (error) {
       Alert.alert('Error', 'Failed to update status');
     }
@@ -80,379 +105,241 @@ const DriverHomeScreen = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      pending: '#FF9800',
-      accepted: '#2196F3',
-      arrived: '#9C27B0',
-      inTransit: '#4CAF50',
-      completed: '#4CAF50',
-      cancelled: '#f44336'
-    };
-    return colors[status] || '#999';
-  };
-
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hello, {profile?.name || 'Driver'}! 👋</Text>
-          <Text style={styles.subtitle}>
-            {isOnline ? 'You are online' : 'You are offline'}
-          </Text>
-        </View>
-        <View style={styles.onlineToggle}>
-          <Switch
-            value={isOnline}
-            onValueChange={handleToggleOnline}
-            trackColor={{ false: '#767577', true: '#81c784' }}
-            thumbColor={isOnline ? '#4CAF50' : '#f4f3f4'}
-          />
+    <View style={styles.container}>
+      {/* Hero Header */}
+      <View style={[styles.heroHdr, { backgroundColor: driverColor }]}>
+        <View style={styles.heroHdrRow}>
+          <View>
+            <Text style={styles.greeting}>Driver Dashboard</Text>
+            <Text style={styles.name}>{profile?.name || 'Driver'}</Text>
+          </View>
+          {profile?.profileImage ? (
+            <Image source={{ uri: profile.profileImage }} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{profile?.name ? profile.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'D'}</Text>
+            </View>
+          )}
         </View>
       </View>
 
-      {activeOrder ? (
-        <TouchableOpacity 
-          style={styles.activeOrderCard}
-          onPress={() => navigation.navigate('ActiveOrder')}
-        >
-          <View style={styles.orderHeader}>
-            <Text style={styles.orderTitle}>Active Order</Text>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(activeOrder.status) }]}>
-              <Text style={styles.statusText}>{activeOrder.status}</Text>
-            </View>
-          </View>
-          
-          <View style={styles.orderRoute}>
-            <View style={styles.routePoint}>
-              <Text style={styles.routeIcon}>📍</Text>
-              <View style={styles.routeInfo}>
-                <Text style={styles.routeLabel}>Pickup</Text>
-                <Text style={styles.routeAddress} numberOfLines={1}>
-                  {activeOrder.pickup?.address}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.routeLine} />
-            <View style={styles.routePoint}>
-              <Text style={styles.routeIcon}>🏁</Text>
-              <View style={styles.routeInfo}>
-                <Text style={styles.routeLabel}>Drop</Text>
-                <Text style={styles.routeAddress} numberOfLines={1}>
-                  {activeOrder.dropoff?.address}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.orderFooter}>
-            <Text style={styles.earningsLabel}>Estimated Earnings</Text>
-            <Text style={styles.earningsAmount}>₹{activeOrder.estimatedFare}</Text>
-          </View>
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.noActiveOrder}>
-          <Text style={styles.noOrderIcon}>🚗</Text>
-          <Text style={styles.noOrderText}>
-            {isOnline ? 'Waiting for orders...' : 'Go online to receive orders'}
-          </Text>
+      {/* Main Content */}
+      <ScrollView
+        style={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Online Toggle */}
+        <View style={styles.toggleContainer}>
+          <OnlineToggle isOnline={isOnline} onToggle={handleToggleOnline} />
         </View>
-      )}
 
-      <View style={styles.quickActions}>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('Earnings')}
-        >
-          <Text style={styles.actionIcon}>💰</Text>
-          <Text style={styles.actionText}>Earnings</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('Documents')}
-        >
-          <Text style={styles.actionIcon}>📄</Text>
-          <Text style={styles.actionText}>Documents</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('Profile')}
-        >
-          <Text style={styles.actionIcon}>👤</Text>
-          <Text style={styles.actionText}>Profile</Text>
-        </TouchableOpacity>
-      </View>
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
+          <EarningCard label="Today's Earn" value={`₹${todayEarnings}`} variant="success" />
+          <EarningCard label="Orders" value={String(totalTrips)} variant="primary" />
+          <EarningCard label="Rating" value={`${rating}⭐`} variant="warning" />
+        </View>
 
-      <View style={styles.recentOrders}>
+        {/* New Orders Nearby */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Orders</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('OrderHistory')}>
-            <Text style={styles.seeAll}>See All</Text>
-          </TouchableOpacity>
+          <Text style={styles.secTitle}>New Orders Nearby</Text>
+          <Pill label="3 new" variant="purple" />
         </View>
 
-        {recentOrders.length === 0 ? (
-          <View style={styles.emptyOrders}>
-            <Text style={styles.emptyText}>No orders yet</Text>
-          </View>
-        ) : (
-          recentOrders.map((order) => (
-            <TouchableOpacity 
-              key={order._id} 
-              style={styles.orderItem}
-              onPress={() => navigation.navigate('OrderDetail', { orderId: order._id })}
-            >
-              <View style={styles.orderItemHeader}>
-                <Text style={styles.orderId}>#{order.orderId}</Text>
-                <View style={[styles.orderStatus, { backgroundColor: getStatusColor(order.status) }]}>
-                  <Text style={styles.orderStatusText}>{order.status}</Text>
+        {nearbyOrders.map((order) => (
+          <View key={order.id} style={styles.orderCardWrapper}>
+            <View style={styles.orderCard}>
+              <View style={styles.ocTop}>
+                <Text style={styles.ocId}>{order.orderId}</Text>
+                <Text style={[styles.price, { color: driverColor }]}>₹{order.estimatedFare}</Text>
+              </View>
+              <View style={styles.routeCol}>
+                <View style={[styles.rdot, styles.rdotTop, { backgroundColor: driverColor }]} />
+                <View style={{ paddingLeft: 4, marginBottom: 14 }}>
+                  <Text style={styles.rtext}>{order.pickup?.address}</Text>
+                </View>
+                <View style={[styles.rdot, styles.rdotBot, { backgroundColor: colors.success }]} />
+                <View style={{ paddingLeft: 4 }}>
+                  <Text style={styles.rtext}>{order.dropoff?.address}</Text>
                 </View>
               </View>
-              <View style={styles.orderItemRoute}>
-                <Text style={styles.routeText} numberOfLines={1}>
-                  {order.pickup?.address} → {order.dropoff?.address}
-                </Text>
+              <View style={styles.ocBot}>
+                <Pill label={order.distance} variant="green" />
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.declineBtn]}
+                    onPress={() => handleDeclineOrder(order.id)}
+                  >
+                    <Text style={styles.declineText}>Decline</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.acceptBtn, { backgroundColor: driverColor }]}
+                    onPress={() => handleAcceptOrder(order.id)}
+                  >
+                    <Text style={styles.acceptText}>Accept</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={styles.orderItemFooter}>
-                <Text style={styles.orderDate}>
-                  {new Date(order.createdAt).toLocaleDateString()}
-                </Text>
-                <Text style={styles.orderFare}>₹{order.finalFare}</Text>
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
-      </View>
-    </ScrollView>
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#fff',
   },
-  header: {
+  heroHdr: {
+    padding: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+  },
+  heroHdrRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#2196F3',
+    alignItems: 'flex-start',
   },
   greeting: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#fff',
-    opacity: 0.9,
-    marginTop: 5,
-  },
-  onlineToggle: {
-    padding: 10,
-  },
-  activeOrderCard: {
-    backgroundColor: '#fff',
-    margin: 20,
-    padding: 20,
-    borderRadius: 16,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  orderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  orderTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 15,
-  },
-  statusText: {
-    color: '#fff',
     fontSize: 12,
-    fontWeight: 'bold',
-    textTransform: 'capitalize',
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '600',
   },
-  orderRoute: {
-    marginBottom: 15,
-  },
-  routePoint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  routeIcon: {
+  name: {
     fontSize: 20,
-    marginRight: 10,
-  },
-  routeInfo: {
-    flex: 1,
-  },
-  routeLabel: {
-    fontSize: 12,
-    color: '#999',
-  },
-  routeAddress: {
-    fontSize: 14,
-    color: '#333',
+    fontWeight: '800',
+    color: '#fff',
     marginTop: 2,
   },
-  routeLine: {
-    width: 2,
-    height: 20,
-    backgroundColor: '#ddd',
-    marginLeft: 9,
-    marginVertical: 5,
-  },
-  orderFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 15,
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  earningsLabel: {
+  avatarText: {
     fontSize: 14,
-    color: '#666',
+    fontWeight: '800',
+    color: '#fff',
   },
-  earningsAmount: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#4CAF50',
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  noActiveOrder: {
+  content: {
+    flex: 1,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    marginTop: -14,
     backgroundColor: '#fff',
-    margin: 20,
-    padding: 40,
-    borderRadius: 16,
-    alignItems: 'center',
   },
-  noOrderIcon: {
-    fontSize: 48,
-    marginBottom: 10,
+  toggleContainer: {
+    paddingVertical: 10,
+    paddingBottom: 16,
   },
-  noOrderText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-  },
-  quickActions: {
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  actionButton: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    width: 100,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  actionIcon: {
-    fontSize: 28,
-    marginBottom: 8,
-  },
-  actionText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#333',
-  },
-  recentOrders: {
-    padding: 20,
+    gap: 10,
+    paddingHorizontal: 16,
+    marginBottom: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    paddingHorizontal: 16,
+    marginBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  secTitle: {
+    fontSize: 15,
+    fontWeight: '800',
   },
-  seeAll: {
-    color: '#2196F3',
-    fontSize: 14,
+  orderCardWrapper: {
+    paddingHorizontal: 16,
   },
-  orderItem: {
+  orderCard: {
     backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
+    padding: 14,
+    marginBottom: 12,
+  },
+  ocTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 10,
   },
-  orderItemHeader: {
+  ocId: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9CA3AF',
+  },
+  price: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  routeCol: {
+    flexDirection: 'column',
+    position: 'relative',
+    paddingLeft: 18,
+    marginBottom: 10,
+  },
+  rdot: {
+    position: 'absolute',
+    left: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  rdotTop: {
+    top: 3,
+  },
+  rdotBot: {
+    bottom: 3,
+  },
+  rtext: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  ocBot: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginTop: 10,
   },
-  orderId: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  orderStatus: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+  btn: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     borderRadius: 10,
   },
-  orderStatusText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-    textTransform: 'capitalize',
+  declineBtn: {
+    backgroundColor: '#FEE2E2',
   },
-  orderItemRoute: {
-    marginBottom: 8,
-  },
-  routeText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  orderItemFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  orderDate: {
+  acceptBtn: {},
+  declineText: {
     fontSize: 12,
-    color: '#999',
+    fontWeight: '700',
+    color: '#DC2626',
   },
-  orderFare: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-  },
-  emptyOrders: {
-    padding: 30,
-    alignItems: 'center',
-  },
-  emptyText: {
-    color: '#999',
-    fontSize: 14,
+  acceptText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
   },
 });
 

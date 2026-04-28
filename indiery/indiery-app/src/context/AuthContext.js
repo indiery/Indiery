@@ -9,22 +9,26 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [needsRoleSelection, setNeedsRoleSelection] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(async (firebaseUser) => {
       if (firebaseUser) {
         try {
           // Get backend profile
-          const response = await authApi.getMe();
-          setProfile(response.data);
+          const user = await authApi.getMe();
+          setProfile(user);
+          setNeedsRoleSelection(!user?.role);
         } catch (err) {
           // If getMe fails, user might not be registered in backend yet
           setProfile(null);
+          setNeedsRoleSelection(true);
         }
         setUser(firebaseUser);
       } else {
         setUser(null);
         setProfile(null);
+        setNeedsRoleSelection(false);
       }
       setLoading(false);
     });
@@ -36,10 +40,24 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null);
       const response = await authApi.register(firebaseToken, options);
-      setProfile(response.data);
-      return response.data;
+      setProfile(response);
+      setNeedsRoleSelection(response.needsRoleSelection || false);
+      return response;
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed');
+      throw err;
+    }
+  };
+
+  const completeRegistration = async (firebaseToken, data) => {
+    try {
+      setError(null);
+      const response = await authApi.completeRegistration(firebaseToken, data);
+      setProfile(response);
+      setNeedsRoleSelection(false);
+      return response;
+    } catch (err) {
+      setError(err.response?.data?.message || 'Registration failed');
       throw err;
     }
   };
@@ -52,13 +70,15 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setUser(null);
       setProfile(null);
+      setNeedsRoleSelection(false);
     }
   };
 
   const refreshProfile = async () => {
     try {
-      const response = await authApi.getMe();
-      setProfile(response.data);
+      const user = await authApi.getMe();
+      setProfile(user);
+      setNeedsRoleSelection(!user?.role);
     } catch (err) {
       console.log('Refresh profile error:', err);
     }
@@ -69,7 +89,9 @@ export const AuthProvider = ({ children }) => {
     profile,
     loading,
     error,
+    needsRoleSelection,
     login,
+    completeRegistration,
     logout,
     refreshProfile,
     isDriver: profile?.role === 'driver',

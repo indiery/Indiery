@@ -5,23 +5,32 @@ import { generateReferralCode } from '../utils/helpers.js';
 
 /**
  * POST /auth/register
- * Body: { role, name?, whatsappOptIn?, fcmToken? }
+ * Body: { role?, name?, whatsappOptIn?, fcmToken? }
  * Header: Authorization: Bearer <Firebase ID Token>
+ * 
+ * If role is not provided, returns needsRoleSelection: true
  */
 export const registerOrLogin = async (req, res, next) => {
   try {
     const { uid, email, phone_number, name: fbName, picture } = req.firebaseUser;
     const { role, name, whatsappOptIn, fcmToken } = req.body;
 
-    if (!['individual', 'driver'].includes(role)) {
-      return res.status(400).json({ success: false, message: 'Invalid role' });
-    }
-
     let user = await User.findOne({ firebaseUid: uid });
 
     if (user) {
+      // User exists - update last login
       user.lastLogin = new Date();
       if (fcmToken) user.fcmToken = fcmToken;
+      
+      // If user has no role, they need to select one
+      if (!user.role) {
+        return res.json({ 
+          success: true, 
+          user, 
+          isNew: false, 
+          needsRoleSelection: true 
+        });
+      }
       
       // Update role if provided and different
       if (role && role !== user.role) {
@@ -44,7 +53,38 @@ export const registerOrLogin = async (req, res, next) => {
       }
       
       await user.save();
-      return res.json({ success: true, user, isNew: false });
+      return res.json({ success: true, user, isNew: false, needsRoleSelection: false });
+    }
+
+    // New user - check if role is provided
+    if (!role) {
+      // Create user without role first, return needsRoleSelection flag
+      user = await User.create({
+        firebaseUid: uid,
+        email: email || null,
+        phone: phone_number || null,
+        name: name || fbName || '',
+        profileImage: picture || null,
+        role: null, // No role yet
+        whatsappOptIn: !!whatsappOptIn,
+        lastLogin: new Date(),
+        fcmToken: fcmToken || null,
+      });
+
+      // Create wallet
+      await Wallet.create({ user: user._id });
+
+      return res.status(201).json({ 
+        success: true, 
+        user, 
+        isNew: true, 
+        needsRoleSelection: true 
+      });
+    }
+
+    // Role provided - create full user
+    if (!['individual', 'driver'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Invalid role' });
     }
 
     user = await User.create({
@@ -74,7 +114,59 @@ export const registerOrLogin = async (req, res, next) => {
       });
     }
 
-    res.status(201).json({ success: true, user, isNew: true });
+    res.status(201).json({ success: true, user, isNew: true, needsRoleSelection: false });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /auth/complete-registration
+ * Body: { role, name?, whatsappOptIn? }
+ * Header: Authorization: Bearer <Firebase ID Token>
+ * 
+ * Complete registration by adding role to user profile
+ */
+export const completeRegistration = async (req, res, next) => {
+  try {
+    const { uid, email, phone_number, name: fbName, picture } = req.firebaseUser;
+    const { role, name, whatsappOptIn } = req.body;
+
+    if (!['individual', 'driver'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Invalid role' });
+    }
+
+    const user = await User.findOne({ firebaseUid: uid });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (user.role) {
+      return res.status(400).json({ success: false, message: 'Role already set' });
+    }
+
+    // Update user with role - use provided name or fallback to Firebase name
+    user.role = role;
+    user.name = name || fbName || user.name || '';
+    user.email = email || user.email;
+    user.phone = phone_number || user.phone;
+    user.profileImage = picture || user.profileImage;
+    if (whatsappOptIn !== undefined) user.whatsappOptIn = whatsappOptIn;
+    await user.save();
+
+    // Create driver profile if registering as driver
+    if (role === 'driver') {
+      await Driver.create({
+        user: user._id,
+        firebaseUid: uid,
+        ownerName: user.name || 'New Driver',
+        city: 'Unknown',
+        vehicleType: 'bike',
+        referralCode: generateReferralCode(user.name),
+      });
+    }
+
+    res.json({ success: true, user });
   } catch (err) {
     next(err);
   }

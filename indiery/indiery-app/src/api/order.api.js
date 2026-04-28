@@ -1,6 +1,19 @@
 import client from './client';
 
 export const orderApi = {
+  // Get current user's orders (customer)
+  getMyOrders: async (status = null) => {
+    const params = status ? { status } : {};
+    const response = await client.get('/orders/my-orders', { params });
+    return response.data;
+  },
+
+  // Get available orders for driver
+  getAvailableOrders: async () => {
+    const response = await client.get('/orders/available');
+    return response.data;
+  },
+
   // Create a new order (customer)
   createOrder: async (orderData) => {
     const response = await client.post('/orders', orderData);

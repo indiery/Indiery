@@ -63,5 +63,5 @@ export const useSocket = () => {
     };
   }, [user]);
 
-  return socket;
+  return { socket };
 };
