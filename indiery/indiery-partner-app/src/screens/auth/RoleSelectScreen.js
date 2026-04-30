@@ -4,25 +4,23 @@ import { useAuth } from '../../context/AuthContext';
 import { getIdToken } from '../../services/firebase';
 
 const RoleSelectScreen = ({ navigation }) => {
-  const { profile, refreshProfile, user, completeRegistration } = useAuth();
+  const { profile, refreshProfile, completeRegistration } = useAuth();
 
   const selectRole = async (role) => {
     try {
-      // Get Firebase token
       const firebaseToken = await getIdToken();
       if (!firebaseToken) {
         Alert.alert('Error', 'Please login again');
         return;
       }
       
-      // Complete registration with role
       await completeRegistration(firebaseToken, { role });
       await refreshProfile();
       
-      // Reset navigation to the appropriate navigator
-      navigation.getParent().reset({
+      // Stay on driver dashboard after role selection
+      navigation.getParent()?.reset({
         index: 0,
-        routes: [{ name: 'Customer' }],
+        routes: [{ name: 'HomeTab' }],
       });
     } catch (error) {
       console.error('Role selection error:', error);
@@ -32,34 +30,25 @@ const RoleSelectScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Select Your Role</Text>
-      <Text style={styles.subtitle}>Choose how you want to use Indiery</Text>
+      <Text style={styles.title}>Join as Partner</Text>
+      <Text style={styles.subtitle}>Choose how you want to partner with Indiery</Text>
       
       <TouchableOpacity
-        style={styles.roleCard}
-        onPress={() => selectRole('individual')}
+        style={[styles.roleCard, styles.driverCard]}
+        onPress={() => selectRole('driver')}
       >
-        <Text style={styles.roleIcon}>📦</Text>
-        <Text style={styles.roleTitle}>Individual</Text>
-        <Text style={styles.roleDesc}>Send packages and goods</Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity
-        style={[styles.roleCard, styles.enterpriseCard]}
-        onPress={() => selectRole('enterprise')}
-      >
-        <Text style={styles.roleIcon}>🏢</Text>
-        <Text style={styles.roleTitle}>Enterprise</Text>
-        <Text style={styles.roleDesc}>Business shipping & logistics</Text>
+        <Text style={styles.roleIcon}>🚚</Text>
+        <Text style={styles.roleTitle}>Driver</Text>
+        <Text style={styles.roleDesc}>Deliver packages and goods</Text>
       </TouchableOpacity>
       
       <TouchableOpacity
         style={[styles.roleCard, styles.transporterCard]}
         onPress={() => selectRole('transporter')}
       >
-        <Text style={styles.roleIcon}>🚚</Text>
+        <Text style={styles.roleIcon}>🚛</Text>
         <Text style={styles.roleTitle}>Transporter</Text>
-        <Text style={styles.roleDesc}>Fleet management & deliveries</Text>
+        <Text style={styles.roleDesc}>Fleet management & business deliveries</Text>
       </TouchableOpacity>
     </View>
   );
@@ -91,28 +80,29 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     alignItems: 'center',
   },
-  enterpriseCard: {
-    backgroundColor: '#FEF3C7',
+  driverCard: {
+    backgroundColor: '#D1FAE5',
     borderWidth: 1,
-    borderColor: '#D97706',
+    borderColor: '#059669',
   },
   transporterCard: {
     backgroundColor: '#DBEAFE',
     borderWidth: 1,
-    borderColor: '#1D4ED8',
+    borderColor: '#2563EB',
   },
   roleIcon: {
     fontSize: 48,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   roleTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 8,
   },
   roleDesc: {
     fontSize: 14,
     color: '#666',
+    textAlign: 'center',
   },
 });
 

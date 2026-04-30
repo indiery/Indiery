@@ -1,17 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { driverApi } from '../../api/driver.api';
+import Pill from '../../components/common/Pill';
+import EarningCard from '../../components/driver/EarningCard';
+import OnlineToggle from '../../components/driver/OnlineToggle';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../hooks/useSocket';
 import colors from '../../theme/colors';
-import OnlineToggle from '../../components/driver/OnlineToggle';
-import EarningCard from '../../components/driver/EarningCard';
-import Pill from '../../components/common/Pill';
 
 const DriverHomeScreen = ({ navigation }) => {
   const { user, profile } = useAuth();
-  const socketHook = useSocket();
-  const socket = socketHook?.socket || null;
+  const socket = useSocket();
   const [isOnline, setIsOnline] = useState(profile?.isOnline || false);
   const [activeOrder, setActiveOrder] = useState(null);
   const [recentOrders, setRecentOrders] = useState([]);

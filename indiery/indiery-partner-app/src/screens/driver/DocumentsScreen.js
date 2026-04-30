@@ -1,8 +1,8 @@
 import * as ImagePicker from 'expo-image-picker';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import themeColors from '../../theme/colors';
 import Pill from '../../components/common/Pill';
+import themeColors from '../../theme/colors';
 
 const DocumentsScreen = ({ navigation }) => {
   const [documents, setDocuments] = useState({

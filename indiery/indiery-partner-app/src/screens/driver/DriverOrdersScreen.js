@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, FlatList, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import colors from '../../theme/colors';
-import Pill from '../../components/common/Pill';
 import orderApi from '../../api/order.api';
+import Pill from '../../components/common/Pill';
+import colors from '../../theme/colors';
 
 const DriverOrdersScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);

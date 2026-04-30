@@ -1,16 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { driverApi } from '../../api/driver.api';
 import { orderApi } from '../../api/order.api';
+import Pill from '../../components/common/Pill';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../hooks/useSocket';
 import colors from '../../theme/colors';
-import Pill from '../../components/common/Pill';
 
 const ActiveOrderScreen = ({ navigation }) => {
   const { user } = useAuth();
-  const socketHook = useSocket();
-  const socket = socketHook?.socket || null;
+  const socket = useSocket();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [otpModalVisible, setOtpModalVisible] = useState(false);

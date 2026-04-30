@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import authApi from '../api/auth.api';
 import { onAuthStateChanged } from '../services/firebase';
 
@@ -94,7 +94,8 @@ export const AuthProvider = ({ children }) => {
     completeRegistration,
     logout,
     refreshProfile,
-    isIndividual: profile?.role === 'individual',
+    isDriver: profile?.role === 'driver',
+    isTransporter: profile?.role === 'transporter',
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { driverApi } from '../../api/driver.api';
 import { useAuth } from '../../context/AuthContext';
 import colors from '../../theme/colors';
-import Pill from '../../components/common/Pill';
 
 const DriverProfileScreen = ({ navigation }) => {
   const { user, profile, logout } = useAuth();
@@ -63,7 +62,7 @@ const DriverProfileScreen = ({ navigation }) => {
 
   const menuItems = [
     { icon: '👤', label: 'Edit Profile', onPress: () => setEditing(!editing) },
-    { icon: '🎓', label: 'Training', onPress: () => Alert.alert('Training', 'Coming soon') },
+    { icon: '🎓', label: 'Training', onPress: () => navigation.navigate('Training') },
     { icon: '🚗', label: 'My Vehicle', onPress: () => Alert.alert('Vehicle', 'Coming soon') },
     { icon: '📄', label: 'Documents', onPress: () => navigation.navigate('Documents') },
     { icon: '💰', label: 'Earnings', onPress: () => navigation.navigate('Earnings') },

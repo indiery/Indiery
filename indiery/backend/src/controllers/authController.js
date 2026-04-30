@@ -1,5 +1,5 @@
-import User from '../models/User.js';
 import Driver from '../models/Driver.js';
+import User from '../models/User.js';
 import Wallet from '../models/Wallet.js';
 import { generateReferralCode } from '../utils/helpers.js';
 
@@ -132,7 +132,7 @@ export const completeRegistration = async (req, res, next) => {
     const { uid, email, phone_number, name: fbName, picture } = req.firebaseUser;
     const { role, name, whatsappOptIn } = req.body;
 
-    if (!['individual', 'driver'].includes(role)) {
+    if (!['individual', 'driver', 'transporter', 'enterprise'].includes(role)) {
       return res.status(400).json({ success: false, message: 'Invalid role' });
     }
 

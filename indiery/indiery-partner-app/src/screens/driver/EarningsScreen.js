@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { getEarnings } from '../../api/driver.api';
-import colors from '../../theme/colors';
 import Pill from '../../components/common/Pill';
+import colors from '../../theme/colors';
 
 const EarningsScreen = ({ navigation }) => {
   const [earnings, setEarnings] = useState({

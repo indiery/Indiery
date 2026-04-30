@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext';
 
 import AuthNavigator from './AuthNavigator';
 import CustomerNavigator from './CustomerNavigator';
-import DriverNavigator from './DriverNavigator';
 
 const Stack = createNativeStackNavigator();
 
@@ -21,8 +20,6 @@ const AppNavigator = () => {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!user ? (
           <Stack.Screen name="Auth" component={AuthNavigator} />
-        ) : profile?.role === 'driver' ? (
-          <Stack.Screen name="Driver" component={DriverNavigator} />
         ) : (
           <Stack.Screen name="Customer" component={CustomerNavigator} />
         )}
